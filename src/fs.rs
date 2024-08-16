@@ -11,6 +11,7 @@ use crate::dir::{Dir, DirRawStream};
 use crate::dir_entry::{DirFileEntryData, FileAttributes, SFN_PADDING, SFN_SIZE};
 use crate::error::Error;
 use crate::file::File;
+use crate::io::private::Sealed;
 use crate::io::{self, IoBase, Read, ReadFile, ReadLeExt, Seek, SeekFrom, Write, WriteFile, WriteLeExt};
 use crate::table::{
     alloc_cluster, count_free_clusters, format_fat, read_fat_flags, ClusterIterator, RESERVED_FAT_ENTRIES,
@@ -706,6 +707,8 @@ pub(crate) struct FsIoAdapter<'a, IO: ReadWriteSeek, TP, OCC> {
     fs: &'a FileSystem<IO, TP, OCC>,
 }
 
+impl<IO: ReadWriteSeek, TP, OCC> Sealed for FsIoAdapter<'_, IO, TP, OCC> {}
+
 impl<IO: ReadWriteSeek, TP, OCC> IoBase for FsIoAdapter<'_, IO, TP, OCC> {
     type Error = IO::Error;
 }
@@ -809,6 +812,8 @@ impl<B: Clone, S> Clone for DiskSlice<B, S> {
         }
     }
 }
+
+impl<B, S: IoBase> Sealed for DiskSlice<B, S> {}
 
 impl<B, S: IoBase> IoBase for DiskSlice<B, S> {
     type Error = Error<S::Error>;
