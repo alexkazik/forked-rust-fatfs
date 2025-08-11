@@ -207,7 +207,7 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
                 Err(err) => return Err(err),
                 // directory already exists - return it
                 Ok(e) => return Ok(DirEntryOrShortName::DirEntry(e)),
-            };
+            }
             // try to generate short name
             if let Ok(name) = short_name_gen.generate() {
                 return Ok(DirEntryOrShortName::ShortName(name));
@@ -222,6 +222,10 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
     ///
     /// `path` is a '/' separated directory path relative to self directory.
     ///
+    /// An empty path returns the current directory.
+    /// A trailing slash is ignored.
+    /// (But the path '/' will not be found.)
+    ///
     /// # Errors
     ///
     /// Errors that can be returned:
@@ -229,13 +233,22 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
     /// * `Error::NotFound` will be returned if `path` does not point to any existing directory entry.
     /// * `Error::InvalidInput` will be returned if `path` points to a file that is not a directory.
     /// * `Error::Io` will be returned if the underlying storage object returned an I/O error.
-    pub fn open_dir(&self, path: &str) -> Result<Self, Error<IO::Error>> {
+    pub fn open_dir(&self, mut path: &str) -> Result<Self, Error<IO::Error>> {
         trace!("Dir::open_dir {}", path);
-        let (name, rest_opt) = split_path(path);
-        let e = self.find_entry(name, Some(true), None)?;
-        match rest_opt {
-            Some(rest) => e.to_dir().open_dir(rest),
-            None => Ok(e.to_dir()),
+        let mut dir = self.clone();
+        loop {
+            if path.is_empty() {
+                return Ok(dir);
+            }
+            let (name, rest_opt) = split_path(path);
+            let e = dir.find_entry(name, Some(true), None)?.to_dir();
+            match rest_opt {
+                Some(rest) => {
+                    dir = e;
+                    path = rest;
+                }
+                None => return Ok(e),
+            }
         }
     }
 
@@ -563,6 +576,7 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         Ok((stream, start_pos))
     }
 
+    #[allow(clippy::type_complexity)]
     fn alloc_sfn_entry(&self) -> Result<(DirRawStream<'a, IO, TP, OCC>, u64), Error<IO::Error>> {
         let mut stream = self.find_free_entries(1)?;
         let start_pos = stream.seek(io::SeekFrom::Current(0))?;

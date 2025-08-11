@@ -283,6 +283,7 @@ impl<TP: TimeProvider, OCC: OemCpConverter> FsOptions<TP, OCC> {
     }
 
     /// If enabled more validations are performed to check if file-system is conforming to specification.
+    #[must_use]
     pub fn strict(self, strict: bool) -> Self {
         Self {
             update_accessed_date: self.update_accessed_date,
@@ -460,6 +461,12 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         self.bpb.cluster_size()
     }
 
+    /// Get sector size in bytes
+    #[must_use]
+    pub fn bytes_per_sector(&self) -> u16 {
+        self.bpb.bytes_per_sector()
+    }
+
     pub(crate) fn offset_from_cluster(&self, cluster: u32) -> u64 {
         self.offset_from_sector(self.sector_from_cluster(cluster))
     }
@@ -577,6 +584,7 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     fn unmount_internal(&self) -> Result<(), Error<IO::Error>> {
         self.flush_fs_info()?;
         self.set_dirty_flag(false)?;
+        self.disk.borrow_mut().flush()?;
         Ok(())
     }
 
@@ -618,7 +626,7 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     }
 
     /// Returns a root directory object allowing for futher penetration of a filesystem structure.
-    pub fn root_dir(&self) -> Dir<IO, TP, OCC> {
+    pub fn root_dir(&self) -> Dir<'_, IO, TP, OCC> {
         trace!("root_dir");
         let root_rdr = {
             match self.fat_type {
